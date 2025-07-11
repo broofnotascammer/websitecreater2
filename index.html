@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visual Website Builder</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      height: 100vh;
+    }
+    #toolbox {
+      width: 200px;
+      background: #f0f0f0;
+      padding: 10px;
+      border-right: 1px solid #ccc;
+    }
+    #workspace {
+      flex: 1;
+      padding: 20px;
+      background: #fff;
+      overflow: auto;
+    }
+    #properties {
+      width: 250px;
+      background: #f0f0f0;
+      padding: 10px;
+      border-left: 1px solid #ccc;
+    }
+    .element {
+      padding: 8px;
+      margin: 5px 0;
+      background: #fff;
+      border: 1px dashed #999;
+      cursor: move;
+    }
+    .droppable {
+      min-height: 50px;
+      border: 2px dashed #ccc;
+      margin: 10px 0;
+      padding: 10px;
+    }
+    .droppable.highlight {
+      border-color: #666;
+      background: #f8f8f8;
+    }
+    .website-element {
+      margin: 10px 0;
+      padding: 10px;
+      border: 1px solid #ddd;
+      background: white;
+    }
+    .property-group {
+      margin-bottom: 15px;
+    }
+    .property-group h4 {
+      margin: 5px 0;
+    }
+    button {
+      padding: 8px 15px;
+      margin: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <!-- Elements Toolbox -->
+  <div id="toolbox">
+    <h3>Elements</h3>
+    <div class="element" draggable="true" data-type="heading">Heading</div>
+    <div class="element" draggable="true" data-type="paragraph">Paragraph</div>
+    <div class="element" draggable="true" data-type="button">Button</div>
+    <div class="element" draggable="true" data-type="image">Image</div>
+    <div class="element" draggable="true" data-type="divider">Divider</div>
+  </div>
+
+  <!-- Workspace -->
+  <div id="workspace">
+    <h2>Your Website</h2>
+    <div id="page-content" class="droppable">
+      <!-- Elements will be added here -->
+    </div>
+    
+    <div style="margin-top: 30px;">
+      <button id="preview-btn">Preview</button>
+      <button id="publish-btn">Publish to GitHub</button>
+    </div>
+  </div>
+
+  <!-- Properties Panel -->
+  <div id="properties">
+    <h3>Properties</h3>
+    <div id="property-editor">
+      <p>Select an element to edit its properties</p>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      let currentElement = null;
+      const elements = {
+        heading: { text: 'New Heading', level: 1, color: '#000000' },
+        paragraph: { text: 'Lorem ipsum dolor sit amet...', color: '#333333' },
+        button: { text: 'Click Me', color: '#ffffff', bgColor: '#007bff', url: '#' },
+        image: { src: 'https://via.placeholder.com/300x200', alt: 'Sample Image' },
+        divider: { height: '2px', color: '#cccccc' }
+      };
+
+      // Setup drag and drop
+      document.querySelectorAll('.element').forEach(el => {
+        el.addEventListener('dragstart', function(e) {
+          e.dataTransfer.setData('text/plain', this.dataset.type);
+        });
+      });
+
+      const droppable = document.getElementById('page-content');
+      droppable.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        this.classList.add('highlight');
+      });
+
+      droppable.addEventListener('dragleave', function() {
+        this.classList.remove('highlight');
+      });
+
+      droppable.addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.classList.remove('highlight');
+        
+        const type = e.dataTransfer.getData('text/plain');
+        if (type) {
+          addElementToWorkspace(type);
+        }
+      });
+
+      // Add element to workspace
+      function addElementToWorkspace(type) {
+        const element = document.createElement('div');
+        element.className = 'website-element';
+        element.dataset.type = type;
+        
+        // Set default content based on type
+        switch(type) {
+          case 'heading':
+            element.innerHTML = `<h${elements.heading.level}>${elements.heading.text}</h${elements.heading.level}>`;
+            break;
+          case 'paragraph':
+            element.innerHTML = `<p style="color: ${elements.paragraph.color}">${elements.paragraph.text}</p>`;
+            break;
+          case 'button':
+            element.innerHTML = `
+              <a href="${elements.button.url}" 
+                 style="color: ${elements.button.color}; background: ${elements.button.bgColor}; 
+                        padding: 8px 16px; display: inline-block; text-decoration: none; border-radius: 4px;">
+                ${elements.button.text}
+              </a>`;
+            break;
+          case 'image':
+            element.innerHTML = `<img src="${elements.image.src}" alt="${elements.image.alt}" style="max-width: 100%;">`;
+            break;
+          case 'divider':
+            element.innerHTML = `<hr style="border: none; border-top: ${elements.divider.height} solid ${elements.divider.color};">`;
+            break;
+        }
+        
+        // Make element selectable
+        element.addEventListener('click', function() {
+          document.querySelectorAll('.website-element').forEach(el => {
+            el.style.outline = 'none';
+          });
+          this.style.outline = '2px solid #007bff';
+          currentElement = this;
+          showPropertiesPanel(this.dataset.type);
+        });
+        
+        droppable.appendChild(element);
+      }
+
+      // Show properties panel
+      function showPropertiesPanel(type) {
+        const panel = document.getElementById('property-editor');
+        panel.innerHTML = '';
+        
+        const heading = document.createElement('h4');
+        heading.textContent = type.charAt(0).toUpperCase() + type.slice(1) + ' Properties';
+        panel.appendChild(heading);
+        
+        switch(type) {
+          case 'heading':
+            addTextInput(panel, 'Text', elements.heading.text, value => {
+              elements.heading.text = value;
+              currentElement.querySelector('h1,h2,h3,h4,h5,h6').textContent = value;
+            });
+            
+            addSelectInput(panel, 'Level', [1,2,3,4,5,6], elements.heading.level, value => {
+              elements.heading.level = value;
+              const newHeading = document.createElement(`h${value}`);
+              newHeading.textContent = elements.heading.text;
+              currentElement.innerHTML = '';
+              currentElement.appendChild(newHeading);
+            });
+            
+            addColorInput(panel, 'Color', elements.heading.color, value => {
+              elements.heading.color = value;
+              currentElement.querySelector('h1,h2,h3,h4,h5,h6').style.color = value;
+            });
+            break;
+            
+          case 'paragraph':
+            addTextareaInput(panel, 'Text', elements.paragraph.text, value => {
+              elements.paragraph.text = value;
+              currentElement.querySelector('p').textContent = value;
+            });
+            
+            addColorInput(panel, 'Color', elements.paragraph.color, value => {
+              elements.paragraph.color = value;
+              currentElement.querySelector('p').style.color = value;
+            });
+            break;
+            
+          case 'button':
+            addTextInput(panel, 'Text', elements.button.text, value => {
+              elements.button.text = value;
+              currentElement.querySelector('a').textContent = value;
+            });
+            
+            addTextInput(panel, 'Link URL', elements.button.url, value => {
+              elements.button.url = value;
+              currentElement.querySelector('a').href = value;
+            });
+            
+            addColorInput(panel, 'Text Color', elements.button.color, value => {
+              elements.button.color = value;
+              currentElement.querySelector('a').style.color = value;
+            });
+            
+            addColorInput(panel, 'Background', elements.button.bgColor, value => {
+              elements.button.bgColor = value;
+              currentElement.querySelector('a').style.background = value;
+            });
+            break;
+            
+          case 'image':
+            addTextInput(panel, 'Image URL', elements.image.src, value => {
+              elements.image.src = value;
+              currentElement.querySelector('img').src = value;
+            });
+            
+            addTextInput(panel, 'Alt Text', elements.image.alt, value => {
+              elements.image.alt = value;
+              currentElement.querySelector('img').alt = value;
+            });
+            break;
+            
+          case 'divider':
+            addTextInput(panel, 'Height', elements.divider.height, value => {
+              elements.divider.height = value;
+              currentElement.querySelector('hr').style.borderTop = `${value} solid ${elements.divider.color}`;
+            });
+            
+            addColorInput(panel, 'Color', elements.divider.color, value => {
+              elements.divider.color = value;
+              currentElement.querySelector('hr').style.borderTop = `${elements.divider.height} solid ${value}`;
+            });
+            break;
+        }
+      }
+
+      // Helper functions for property inputs
+      function addTextInput(container, label, value, onChange) {
+        const group = document.createElement('div');
+        group.className = 'property-group';
+        
+        const labelEl = document.createElement('label');
+        labelEl.textContent = label;
+        labelEl.style.display = 'block';
+        labelEl.style.marginBottom = '5px';
+        
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = value;
+        input.style.width = '100%';
+        input.style.padding = '5px';
+        
+        input.addEventListener('input', () => onChange(input.value));
+        
+        group.appendChild(labelEl);
+        group.appendChild(input);
+        container.appendChild(group);
+      }
+
+      function addTextareaInput(container, label, value, onChange) {
+        const group = document.createElement('div');
+        group.className = 'property-group';
+        
+        const labelEl = document.createElement('label');
+        labelEl.textContent = label;
+        labelEl.style.display = 'block';
+        labelEl.style.marginBottom = '5px';
+        
+        const textarea = document.createElement('textarea');
+        textarea.value = value;
+        textarea.style.width = '100%';
+        textarea.style.padding = '5px';
+        textarea.style.minHeight = '60px';
+        
+        textarea.addEventListener('input', () => onChange(textarea.value));
+        
+        group.appendChild(labelEl);
+        group.appendChild(textarea);
+        container.appendChild(group);
+      }
+
+      function addSelectInput(container, label, options, value, onChange) {
+        const group = document.createElement('div');
+        group.className = 'property-group';
+        
+        const labelEl = document.createElement('label');
+        labelEl.textContent = label;
+        labelEl.style.display = 'block';
+        labelEl.style.marginBottom = '5px';
+        
+        const select = document.createElement('select');
+        select.style.width = '100%';
+        select.style.padding = '5px';
+        
+        options.forEach(option => {
+          const optEl = document.createElement('option');
+          optEl.value = option;
+          optEl.textContent = option;
+          select.appendChild(optEl);
+        });
+        
+        select.value = value;
+        select.addEventListener('change', () => onChange(select.value));
+        
+        group.appendChild(labelEl);
+        group.appendChild(select);
+        container.appendChild(group);
+      }
+
+      function addColorInput(container, label, value, onChange) {
+        const group = document.createElement('div');
+        group.className = 'property-group';
+        
+        const labelEl = document.createElement('label');
+        labelEl.textContent = label;
+        labelEl.style.display = 'block';
+        labelEl.style.marginBottom = '5px';
+        
+        const input = document.createElement('input');
+        input.type = 'color';
+        input.value = value;
+        input.style.width = '100%';
+        input.style.height = '30px';
+        
+        input.addEventListener('input', () => onChange(input.value));
+        
+        group.appendChild(labelEl);
+        group.appendChild(input);
+        container.appendChild(group);
+      }
+
+      // Preview and Publish functionality
+      document.getElementById('preview-btn').addEventListener('click', function() {
+        const html = generateHTML();
+        const previewWindow = window.open('', '_blank');
+        previewWindow.document.write(html);
+        previewWindow.document.close();
+      });
+
+      document.getElementById('publish-btn').addEventListener('click', async function() {
+        const html = generateHTML();
+        const title = prompt('Enter a title for your page:', 'My Website');
+        
+        if (title) {
+          // Replace with your GitHub info
+          const GITHUB_USER = 'yourusername';
+          const GITHUB_REPO = 'yourrepo';
+          const GITHUB_TOKEN = 'your_token'; // Get from GitHub Settings > Developer settings
+          
+          const filename = `${Date.now()}-${title.toLowerCase().replace(/\s+/g, '-')}.html`;
+          const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${filename}`;
+          
+          try {
+            const response = await fetch(url, {
+              method: 'PUT',
+              headers: {
+                'Authorization': `token ${GITHUB_TOKEN}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                message: `Add ${title}`,
+                content: btoa(unescape(encodeURIComponent(html)))
+              })
+            });
+            
+            const result = await response.json();
+            alert('Successfully published to GitHub!');
+          } catch (error) {
+            console.error('Error:', error);
+            alert('Failed to publish: ' + error.message);
+          }
+        }
+      });
+
+      function generateHTML() {
+        const elements = Array.from(document.querySelectorAll('.website-element'));
+        let html = `<!DOCTYPE html>
+<html>
+<head>
+  <title>My Created Page</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+  </style>
+</head>
+<body>`;
+        
+        elements.forEach(el => {
+          html += el.innerHTML;
+        });
+        
+        html += `</body>
+</html>`;
+        return html;
+      }
+    });
+  </script>
+</body>
+</html>
