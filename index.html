@@ -4,67 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Visual Website Builder</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      height: 100vh;
-    }
-    #toolbox {
-      width: 200px;
-      background: #f0f0f0;
-      padding: 10px;
-      border-right: 1px solid #ccc;
-    }
-    #workspace {
-      flex: 1;
-      padding: 20px;
-      background: #fff;
-      overflow: auto;
-    }
-    #properties {
-      width: 250px;
-      background: #f0f0f0;
-      padding: 10px;
-      border-left: 1px solid #ccc;
-    }
-    .element {
-      padding: 8px;
-      margin: 5px 0;
-      background: #fff;
-      border: 1px dashed #999;
-      cursor: move;
-    }
-    .droppable {
-      min-height: 50px;
-      border: 2px dashed #ccc;
-      margin: 10px 0;
-      padding: 10px;
-    }
-    .droppable.highlight {
-      border-color: #666;
-      background: #f8f8f8;
-    }
-    .website-element {
-      margin: 10px 0;
-      padding: 10px;
-      border: 1px solid #ddd;
-      background: white;
-    }
-    .property-group {
-      margin-bottom: 15px;
-    }
-    .property-group h4 {
-      margin: 5px 0;
-    }
-    button {
-      padding: 8px 15px;
-      margin: 5px;
-      cursor: pointer;
-    }
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <!-- Elements Toolbox -->
@@ -169,12 +109,22 @@
         // Make element selectable
         element.addEventListener('click', function() {
           document.querySelectorAll('.website-element').forEach(el => {
-            el.style.outline = 'none';
+            el.classList.remove('selected');
           });
-          this.style.outline = '2px solid #007bff';
+          this.classList.add('selected');
           currentElement = this;
           showPropertiesPanel(this.dataset.type);
         });
+        
+        // Add delete button
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.innerHTML = '×';
+        deleteBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          this.parentElement.remove();
+        });
+        element.appendChild(deleteBtn);
         
         droppable.appendChild(element);
       }
@@ -199,8 +149,10 @@
               elements.heading.level = value;
               const newHeading = document.createElement(`h${value}`);
               newHeading.textContent = elements.heading.text;
+              newHeading.style.color = elements.heading.color;
               currentElement.innerHTML = '';
               currentElement.appendChild(newHeading);
+              currentElement.appendChild(createDeleteButton());
             });
             
             addColorInput(panel, 'Color', elements.heading.color, value => {
@@ -364,6 +316,17 @@
         container.appendChild(group);
       }
 
+      function createDeleteButton() {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.innerHTML = '×';
+        deleteBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          this.parentElement.remove();
+        });
+        return deleteBtn;
+      }
+
       // Preview and Publish functionality
       document.getElementById('preview-btn').addEventListener('click', function() {
         const html = generateHTML();
@@ -377,29 +340,26 @@
         const title = prompt('Enter a title for your page:', 'My Website');
         
         if (title) {
-          // Replace with your GitHub info
-          const GITHUB_USER = 'broofnotascammer';
-          const GITHUB_REPO = 'websitecreater2';
-          const GITHUB_TOKEN = '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'; // Get from GitHub Settings > Developer settings
-          
-          const filename = `${Date.now()}-${title.toLowerCase().replace(/\s+/g, '-')}.html`;
-          const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${filename}`;
-          
           try {
-            const response = await fetch(url, {
-              method: 'PUT',
+            // Replace with your Render backend URL
+            const response = await fetch('https://your-website-builder-backend.onrender.com/publish', {
+              method: 'POST',
               headers: {
-                'Authorization': `token ${GITHUB_TOKEN}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                message: `Add ${title}`,
-                content: btoa(unescape(encodeURIComponent(html)))
+                title: title,
+                content: html
               })
             });
             
             const result = await response.json();
-            alert('Successfully published to GitHub!');
+            if (response.ok) {
+              alert(`Successfully published to GitHub!\nURL: ${result.url}`);
+              window.open(result.url, '_blank');
+            } else {
+              throw new Error(result.message || 'Publishing failed');
+            }
           } catch (error) {
             console.error('Error:', error);
             alert('Failed to publish: ' + error.message);
@@ -413,14 +373,21 @@
 <html>
 <head>
   <title>My Created Page</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+    img { max-width: 100%; height: auto; }
+    a { text-decoration: none; }
   </style>
 </head>
 <body>`;
         
         elements.forEach(el => {
-          html += el.innerHTML;
+          // Clone to remove delete buttons
+          const clone = el.cloneNode(true);
+          const deleteBtn = clone.querySelector('.delete-btn');
+          if (deleteBtn) deleteBtn.remove();
+          html += clone.innerHTML;
         });
         
         html += `</body>
