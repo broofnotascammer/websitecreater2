@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visual Website Builder</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      height: 100vh;
+    }
+    #toolbox {
+      width: 200px;
+      background: #f0f0f0;
+      padding: 10px;
+      border-right: 1px solid #ccc;
+      overflow-y: auto;
+    }
+    #workspace {
+      flex: 1;
+      padding: 20px;
+      background: #fff;
+      overflow: auto;
+    }
+    #properties {
+      width: 250px;
+      background: #f0f0f0;
+      padding: 10px;
+      border-left: 1px solid #ccc;
+      overflow-y: auto;
+    }
+    .element {
+      padding: 8px;
+      margin: 5px 0;
+      background: #fff;
+      border: 1px dashed #999;
+      cursor: grab;
+      border-radius: 4px;
+    }
+    .droppable {
+      min-height: 200px;
+      border: 2px dashed #ccc;
+      margin: 10px 0;
+      padding: 20px;
+      background: #f9f9f9;
+    }
+    .droppable.highlight {
+      border-color: #007bff;
+      background: #e7f1ff;
+    }
+    .website-element {
+      margin: 15px 0;
+      padding: 15px;
+      border: 1px solid #ddd;
+      background: white;
+      border-radius: 4px;
+      position: relative;
+    }
+    .website-element.selected {
+      outline: 2px solid #007bff;
+    }
+    .property-group {
+      margin-bottom: 15px;
+    }
+    .property-group h4 {
+      margin: 5px 0 10px;
+      font-size: 16px;
+    }
+    button {
+      padding: 8px 15px;
+      margin: 5px;
+      cursor: pointer;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+    button:hover {
+      background: #0069d9;
+    }
+    button:disabled {
+      background: #cccccc;
+      cursor: not-allowed;
+    }
+    input, textarea, select {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    .delete-btn {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      font-size: 12px;
+      line-height: 1;
+      padding: 0;
+      cursor: pointer;
+    }
+    .delete-btn:hover {
+      background: #c82333;
+    }
+    #auth-status {
+      padding: 10px;
+      margin-top: 20px;
+      border-radius: 4px;
+      text-align: center;
+    }
+    .authenticated {
+      background: #d4edda;
+      color: #155724;
+    }
+    .not-authenticated {
+      background: #f8d7da;
+      color: #721c24;
+    }
+  </style>
+</head>
+<body>
+  <!-- Elements Toolbox -->
+  <div id="toolbox">
+    <h3>Elements</h3>
+    <div class="element" draggable="true" data-type="heading">
+      Heading
+    </div>
+    <div class="element" draggable="true" data-type="paragraph">
+      Paragraph
+    </div>
+    <div class="element" draggable="true" data-type="button">
+      Button
+    </div>
+    <div class="element" draggable="true" data-type="image">
+      Image
+    </div>
+    <div class="element" draggable="true" data-type="divider">
+      Divider
+    </div>
+    
+    <div id="auth-status" class="not-authenticated">
+      GitHub: Not Connected
+    </div>
+  </div>
+
+  <!-- Workspace -->
+  <div id="workspace">
+    <h2>Your Website</h2>
+    <div id="page-content" class="droppable">
+      <!-- Elements will be added here -->
+    </div>
+    
+    <div style="margin-top: 30px;">
+      <button id="preview-btn">Preview</button>
+      <button id="publish-btn" disabled>Publish to GitHub</button>
+      <button id="clear-btn">Clear All</button>
+    </div>
+  </div>
+
+  <!-- Properties Panel -->
+  <div id="properties">
+    <h3>Properties</h3>
+    <div id="property-editor">
+      <p>Select an element to edit its properties</p>
+    </div>
+  </div>
+
+  <script>
+    // YOUR GITHUB CREDENTIALS - REPLACE THESE VALUES
+    const GITHUB_USER = 'YOUR_GITHUB_USERNAME';
+    const GITHUB_REPO = 'YOUR_REPO_NAME';
+    const GITHUB_TOKEN = 'YOUR_GITHUB_TOKEN'; // Must have repo permissions
+    
+    document.addEventListener('DOMContentLoaded', function() {
+      // Verify credentials
+      if (GITHUB_USER && GITHUB_REPO && GITHUB_TOKEN) {
+        document.getElementById('auth-status').className = 'authenticated';
+        document.getElementById('auth-status').textContent = `GitHub: Connected to ${GITHUB_USER}/${GITHUB_REPO}`;
+        document.getElementById('publish-btn').disabled = false;
+      }
+      
+      let currentElement = null;
+      const defaultElements = {
+        heading: { text: 'New Heading', level: '2', color: '#000000', align: 'left' },
+        paragraph: { text: 'Type your paragraph text here...', color: '#333333', align: 'left' },
+        button: { text: 'Click Me', color: '#ffffff', bgColor: '#007bff', url: '#', align: 'left' },
+        image: { src: 'https://via.placeholder.com/400x300', alt: 'Sample Image', width: '100%', align: 'center' },
+        divider: { height: '2px', color: '#cccccc', width: '100%' }
+      };
+
+      // Setup drag and drop
+      document.querySelectorAll('.element[draggable="true"]').forEach(el => {
+        el.addEventListener('dragstart', function(e) {
+          e.dataTransfer.setData('text/plain', this.dataset.type);
+        });
+      });
+
+      const droppable = document.getElementById('page-content');
+      
+      droppable.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        this.classList.add('highlight');
+      });
+
+      droppable.addEventListener('dragleave', function() {
+        this.classList.remove('highlight');
+      });
+
+      droppable.addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.classList.remove('highlight');
+        
+        const type = e.dataTransfer.getData('text/plain');
+        if (type) {
+          addElementToWorkspace(type);
+        }
+      });
+
+      // Add element to workspace
+      function addElementToWorkspace(type) {
+        const element = document.createElement('div');
+        element.className = 'website-element';
+        element.dataset.type = type;
+        
+        // Create unique ID for the element
+        const elementId = 'element-' + Date.now();
+        element.id = elementId;
+        
+        // Add delete button
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.innerHTML = '×';
+        deleteBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          element.remove();
+          currentElement = null;
+          document.getElementById('property-editor').innerHTML = '<p>Select an element to edit its properties</p>';
+        });
+        element.appendChild(deleteBtn);
+        
+        // Set default content based on type
+        switch(type) {
+          case 'heading':
+            element.innerHTML += `<h${defaultElements.heading.level} style="color: ${defaultElements.heading.color}; text-align: ${defaultElements.heading.align}">${defaultElements.heading.text}</h${defaultElements.heading.level}>`;
+            break;
+          case 'paragraph':
+            element.innerHTML += `<p style="color: ${defaultElements.paragraph.color}; text-align: ${defaultElements.paragraph.align}">${defaultElements.paragraph.text}</p>`;
+            break;
+          case 'button':
+            element.innerHTML += `
+              <div style="text-align: ${defaultElements.button.align}">
+                <a href="${defaultElements.button.url}" 
+                   style="color: ${defaultElements.button.color}; background: ${defaultElements.button.bgColor}; 
+                          padding: 8px 16px; display: inline-block; text-decoration: none; border-radius: 4px;">
+                  ${defaultElements.button.text}
+                </a>
+              </div>`;
+            break;
+          case 'image':
+            element.innerHTML += `
+              <div style="text-align: ${defaultElements.image.align}">
+                <img src="${defaultElements.image.src}" alt="${defaultElements.image.alt}" 
+                     style="max-width: ${defaultElements.image.width}">
+              </div>`;
+            break;
+          case 'divider':
+            element.innerHTML += `
+              <div style="text-align: center;">
+                <hr style="border: none; border-top: ${defaultElements.divider.height} solid ${defaultElements.divider.color}; width: ${defaultElements.divider.width}">
+              </div>`;
+            break;
+        }
+        
+        // Make element selectable
+        element.addEventListener('click', function(e) {
+          if (e.target.classList.contains('delete-btn')) return;
+          
+          document.querySelectorAll('.website-element').forEach(el => {
+            el.classList.remove('selected');
+          });
+          this.classList.add('selected');
+          currentElement = this;
+          showPropertiesPanel(this.dataset.type, this.id);
+        });
+        
+        droppable.appendChild(element);
+        
+        // Auto-select the new element
+        element.click();
+      }
+
+      // Show properties panel
+      function showPropertiesPanel(type, elementId) {
+        const panel = document.getElementById('property-editor');
+        panel.innerHTML = '';
+        
+        const heading = document.createElement('h4');
+        heading.textContent = type.charAt(0).toUpperCase() + type.slice(1) + ' Properties';
+        panel.appendChild(heading);
+        
+        // Get current values from the element
+        const element = document.getElementById(elementId);
+        let currentValues = JSON.parse(JSON.stringify(defaultElements[type]));
+        
+        try {
+          switch(type) {
+            case 'heading':
+              const headingEl = element.querySelector('h1,h2,h3,h4,h5,h6');
+              currentValues.text = headingEl.textContent;
+              currentValues.level = headingEl.tagName.substring(1);
+              currentValues.color = headingEl.style.color || currentValues.color;
+              currentValues.align = headingEl.style.textAlign || currentValues.align;
+              break;
+              
+            case 'paragraph':
+              const paragraphEl = element.querySelector('p');
+              currentValues.text = paragraphEl.textContent;
+              currentValues.color = paragraphEl.style.color || currentValues.color;
+              currentValues.align = paragraphEl.style.textAlign || currentValues.align;
+              break;
+              
+            case 'button':
+              const buttonEl = element.querySelector('a');
+              currentValues.text = buttonEl.textContent;
+              currentValues.url = buttonEl.href;
+              currentValues.color = buttonEl.style.color || currentValues.color;
+              currentValues.bgColor = buttonEl.style.background || currentValues.bgColor;
+              currentValues.align = element.querySelector('div').style.textAlign || currentValues.align;
+              break;
+              
+            case 'image':
+              const imageEl = element.querySelector('img');
+              currentValues.src = imageEl.src;
+              currentValues.alt = imageEl.alt;
+              currentValues.width = imageEl.style.maxWidth || currentValues.width;
+              currentValues.align = element.querySelector('div').style.textAlign || currentValues.align;
+              break;
+              
+            case 'divider':
+              const dividerEl = element.querySelector('hr');
+              const dividerStyle = dividerEl.style;
+              currentValues.height = dividerStyle.borderTopWidth || currentValues.height;
+              currentValues.color = dividerStyle.borderTopColor || currentValues.color;
+              currentValues.width = dividerStyle.width || currentValues.width;
+              break;
+          }
+        } catch (e) {
+          console.error('Error reading element properties:', e);
+        }
+        
+        // Create property controls based on type
+        switch(type) {
+          case 'heading':
+            addTextInput(panel, 'Text', currentValues.text, value => {
+              updateElement(elementId, { text: value });
+            });
+            
+            addSelectInput(panel, 'Level', [
+              {value: '1', label: 'Heading 1 (largest)'},
+              {value: '2', label: 'Heading 2'},
+              {value: '3', label: 'Heading 3'},
+              {value: '4', label: 'Heading 4'},
+              {value: '5', label: 'Heading 5'},
+              {value: '6', label: 'Heading 6 (smallest)'}
+            ], currentValues.level, value => {
+              updateElement(elementId, { level: value });
+            });
+            
+            addColorInput(panel, 'Color', currentValues.color, value => {
+              updateElement(elementId, { color: value });
+            });
+            
+            addSelectInput(panel, 'Alignment', [
+              {value: 'left', label: 'Left'},
+              {value: 'center', label: 'Center'},
+              {value: 'right', label: 'Right'}
+            ], currentValues.align, value => {
+              updateElement(elementId, { align: value });
+            });
+            break;
+            
+          case 'paragraph':
+            addTextareaInput(panel, 'Text', currentValues.text, value => {
+              updateElement(elementId, { text: value });
+            });
+            
+            addColorInput(panel, 'Color', currentValues.color, value => {
+              updateElement(elementId, { color: value });
+            });
+            
+            addSelectInput(panel, 'Alignment', [
+              {value: 'left', label: 'Left'},
+              {value: 'center', label: 'Center'},
+              {value: 'right', label: 'Right'}
+            ], currentValues.align, value => {
+              updateElement(elementId, { align: value });
+            });
+            break;
+            
+          case 'button':
+            addTextInput(panel, 'Text', currentValues.text, value => {
+              updateElement(elementId, { text: value });
+            });
+            
+            addTextInput(panel, 'Link URL', currentValues.url, value => {
+              updateElement(elementId, { url: value });
+            });
+            
+            addColorInput(panel, 'Text Color', currentValues.color, value => {
+              updateElement(elementId, { color: value });
+            });
+            
+            addColorInput(panel, 'Background', currentValues.bgColor, value => {
+              updateElement(elementId, { bgColor: value });
+            });
+            
+            addSelectInput(panel, 'Alignment', [
+              {value: 'left', label: 'Left'},
+              {value: 'center', label: 'Center'},
+              {value: 'right', label: 'Right'}
+            ], currentValues.align, value => {
+              updateElement(elementId, { align: value });
+            });
+            break;
+            
+          case 'image':
+            addTextInput(panel, 'Image URL', currentValues.src, value => {
+              updateElement(elementId, { src: value });
+            });
+            
+            addTextInput(panel, 'Alt Text', currentValues.alt, value => {
+              updateElement(elementId, { alt: value });
+            });
+            
+            addTextInput(panel, 'Width', currentValues.width, value => {
+              updateElement(elementId, { width: value });
+            });
+            
+            addSelectInput(panel, 'Alignment', [
+              {value: 'left', label: 'Left'},
+              {value: 'center', label: 'Center'},
+              {value: 'right', label: 'Right'}
+            ], currentValues.align, value => {
+              updateElement(elementId, { align: value });
+            });
+            break;
+            
+          case 'divider':
+            addTextInput(panel, 'Height', currentValues.height, value => {
+              updateElement(elementId, { height: value });
+            });
+            
+            addColorInput(panel, 'Color', currentValues.color, value => {
+              updateElement(elementId, { color: value });
+            });
+            
+            addTextInput(panel, 'Width', currentValues.width, value => {
+              updateElement(elementId, { width: value });
+            });
+            break;
+        }
+      }
+
+      // Update element with new properties
+      function updateElement(elementId, updates) {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+        
+        const type = element.dataset.type;
+        
+        switch(type) {
+          case 'heading':
+            if (updates.text !== undefined) {
+              const headingEl = element.querySelector('h1,h2,h3,h4,h5,h6');
+              headingEl.textContent = updates.text;
+            }
+            if (updates.level !== undefined) {
+              const oldHeading = element.querySelector('h1,h2,h3,h4,h5,h6');
+              const newHeading = document.createElement(`h${updates.level}`);
+              newHeading.textContent = oldHeading.textContent;
+              newHeading.style.color = oldHeading.style.color;
+              newHeading.style.textAlign = oldHeading.style.textAlign;
+              oldHeading.replaceWith(newHeading);
+            }
+            if (updates.color !== undefined) {
+              const headingEl = element.querySelector('h1,h2,h3,h4,h5,h6');
+              headingEl.style.color = updates.color;
+            }
+            if (updates.align !== undefined) {
+              const headingEl = element.querySelector('h1,h2,h3,h4,h5,h6');
+              headingEl.style.textAlign = updates.align;
+            }
+            break;
+            
+          case 'paragraph':
+            if (updates.text !== undefined) {
+              const paragraphEl = element.querySelector('p');
+              paragraphEl.textContent = updates.text;
+            }
+            if (updates.color !== undefined) {
+              const paragraphEl = element.querySelector('p');
+              paragraphEl.style.color = updates.color;
+            }
+            if (updates.align !== undefined) {
+              const paragraphEl = element.querySelector('p');
+              paragraphEl.style.textAlign = updates.align;
+            }
+            break;
+            
+          case 'button':
+            if (updates.text !== undefined) {
+              const buttonEl = element.querySelector('a');
+              buttonEl.textContent = updates.text;
+            }
+            if (updates.url !== undefined) {
+              const buttonEl = element.querySelector('a');
+              buttonEl.href = updates.url;
+            }
+            if (updates.color !== undefined) {
+              const buttonEl = element.querySelector('a');
+              buttonEl.style.color = updates.color;
+            }
+            if (updates.bgColor !== undefined) {
+              const buttonEl = element.querySelector('a');
+              buttonEl.style.background = updates.bgColor;
+            }
+            if (updates.align !== undefined) {
+              const container = element.querySelector('div');
+              container.style.textAlign = updates.align;
+            }
+            break;
+            
+          case 'image':
+            if (updates.src !== undefined) {
+              const imageEl = element.querySelector('img');
+              imageEl.src = updates.src;
+            }
+            if (updates.alt !== undefined) {
+              const imageEl = element.querySelector('img');
+              imageEl.alt = updates.alt;
+            }
+            if (updates.width !== undefined) {
+              const imageEl = element.querySelector('img');
+              imageEl.style.maxWidth = updates.width;
+            }
+            if (updates.align !== undefined) {
+              const container = element.querySelector('div');
+              container.style.textAlign = updates.align;
+            }
+            break;
+            
+          case 'divider':
+            if (updates.height !== undefined || updates.color !== undefined || updates.width !== undefined) {
+              const dividerEl = element.querySelector('hr');
+              dividerEl.style.borderTop = 
+                `${updates.height || dividerEl.style.borderTopWidth || defaultElements.divider.height} 
+                 solid 
+                 ${updates.color || dividerEl.style.borderTopColor || defaultElements.divider.color}`;
+              dividerEl.style.width = updates.width || dividerEl.style.width || defaultElements.divider.width;
+            }
+            break;
+        }
+      }
+
+      // Helper functions for property inputs
+      function addTextInput(container, label, value, onChange) {
+        const group = document.createElement('div');
+        group.className = 'property-group';
+        
+        const labelEl = document.createElement('label');
+        labelEl.textContent = label;
+        labelEl.htmlFor = label.replace(/\s+/g, '-') + '-input';
+        
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.id = label.replace(/\s+/g, '-') + '-input';
+        input.value = value;
+        
+        input.addEventListener('input', () => onChange(input.value));
+        
+        group.appendChild(labelEl);
+        group.appendChild(input);
+        container.appendChild(group);
+      }
+
+      function addTextareaInput(container, label, value, onChange) {
+        const group = document.createElement('div');
+        group.className = 'property-group';
+        
+        const labelEl = document.createElement('label');
+        labelEl.textContent = label;
+        labelEl.htmlFor = label.replace(/\s+/g, '-') + '-textarea';
+        
+        const textarea = document.createElement('textarea');
+        textarea.id = label.replace(/\s+/g, '-') + '-textarea';
+        textarea.value = value;
+        textarea.rows = 4;
+        
+        textarea.addEventListener('input', () => onChange(textarea.value));
+        
+        group.appendChild(labelEl);
+        group.appendChild(textarea);
+        container.appendChild(group);
+      }
+
+      function addSelectInput(container, label, options, value, onChange) {
+        const group = document.createElement('div');
+        group.className = 'property-group';
+        
+        const labelEl = document.createElement('label');
+        labelEl.textContent = label;
+        labelEl.htmlFor = label.replace(/\s+/g, '-') + '-select';
+        
+        const select = document.createElement('select');
+        select.id = label.replace(/\s+/g, '-') + '-select';
+        
+        options.forEach(option => {
+          const optEl = document.createElement('option');
+          optEl.value = option.value;
+          optEl.textContent = option.label;
+          if (option.value === value) optEl.selected = true;
+          select.appendChild(optEl);
+        });
+        
+        select.addEventListener('change', () => onChange(select.value));
+        
+        group.appendChild(labelEl);
+        group.appendChild(select);
+        container.appendChild(group);
+      }
+
+      function addColorInput(container, label, value, onChange) {
+        const group = document.createElement('div');
+        group.className = 'property-group';
+        
+        const labelEl = document.createElement('label');
+        labelEl.textContent = label;
+        labelEl.htmlFor = label.replace(/\s+/g, '-') + '-color';
+        
+        const colorWrapper = document.createElement('div');
+        colorWrapper.style.display = 'flex';
+        colorWrapper.style.alignItems = 'center';
+        colorWrapper.style.gap = '10px';
+        
+        const input = document.createElement('input');
+        input.type = 'color';
+        input.id = label.replace(/\s+/g, '-') + '-color';
+        input.value = value;
+        input.style.flex = '0 0 40px';
+        input.style.height = '30px';
+        input.style.padding = '0';
+        
+        const textInput = document.createElement('input');
+        textInput.type = 'text';
+        textInput.value = value;
+        textInput.style.flex = '1';
+        
+        input.addEventListener('input', () => {
+          textInput.value = input.value;
+          onChange(input.value);
+        });
+        
+        textInput.addEventListener('input', () => {
+          if (/^#[0-9A-F]{6}$/i.test(textInput.value)) {
+            input.value = textInput.value;
+            onChange(textInput.value);
+          }
+        });
+        
+        colorWrapper.appendChild(input);
+        colorWrapper.appendChild(textInput);
+        
+        group.appendChild(labelEl);
+        group.appendChild(colorWrapper);
+        container.appendChild(group);
+      }
+
+      // Preview functionality
+      document.getElementById('preview-btn').addEventListener('click', function() {
+        const html = generateHTML();
+        const previewWindow = window.open('', '_blank');
+        previewWindow.document.write(html);
+        previewWindow.document.close();
+      });
+
+      // Clear all elements
+      document.getElementById('clear-btn').addEventListener('click', function() {
+        if (confirm('Are you sure you want to clear all elements?')) {
+          document.getElementById('page-content').innerHTML = '';
+          document.getElementById('property-editor').innerHTML = '<p>Select an element to edit its properties</p>';
+          currentElement = null;
+        }
+      });
+
+      // Publish to GitHub
+      document.getElementById('publish-btn').addEventListener('click', async function() {
+        if (!GITHUB_USER || !GITHUB_REPO || !GITHUB_TOKEN) {
+          alert('GitHub credentials not configured');
+          return;
+        }
+        
+        const title = prompt('Enter a title for your page:', 'My Website');
+        if (!title) return;
+        
+        const html = generateHTML();
+        const filename = `${Date.now()}-${title.toLowerCase().replace(/\s+/g, '-')}.html`;
+        const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${filename}`;
+        
+        this.disabled = true;
+        this.textContent = 'Publishing...';
+        
+        try {
+          const response = await fetch(url, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `token ${GITHUB_TOKEN}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              message: `Add ${title}`,
+              content: btoa(unescape(encodeURIComponent(html)))
+            })
+          });
+          
+          const result = await response.json();
+          
+          if (response.ok) {
+            alert(`Successfully published to GitHub!\n\nYour page will be available at:\nhttps://${GITHUB_USER}.github.io/${GITHUB_REPO}/${filename}`);
+          } else {
+            throw new Error(result.message || 'Failed to publish');
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          alert('Failed to publish: ' + error.message);
+        } finally {
+          this.disabled = false;
+          this.textContent = 'Publish to GitHub';
+        }
+      });
+
+      // Generate final HTML
+      function generateHTML() {
+        const elements = Array.from(document.querySelectorAll('.website-element'));
+        let html = `<!DOCTYPE html>
+<html>
+<head>
+  <title>My Created Page</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      max-width: 800px; 
+      margin: 0 auto; 
+      padding: 20px; 
+      line-height: 1.6;
+    }
+    img { max-width: 100%; height: auto; }
+    a { text-decoration: none; }
+  </style>
+</head>
+<body>`;
+        
+        elements.forEach(el => {
+          // Clone the element to avoid modifying the original
+          const clone = el.cloneNode(true);
+          // Remove the delete button and ID
+          const deleteBtn = clone.querySelector('.delete-btn');
+          if (deleteBtn) deleteBtn.remove();
+          clone.removeAttribute('id');
+          clone.classList.remove('website-element', 'selected');
+          // Add to HTML
+          html += clone.outerHTML;
+        });
+        
+        html += `</body>
+</html>`;
+        return html;
+      }
+    });
+  </script>
+</body>
+</html>
