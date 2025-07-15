@@ -115,13 +115,6 @@
     .delete-btn:hover {
       background: #c82333;
     }
-    #github-settings {
-      background: white;
-      padding: 15px;
-      margin-top: 20px;
-      border-radius: 4px;
-      border: 1px solid #ddd;
-    }
   </style>
 </head>
 <body>
@@ -144,19 +137,7 @@
       <i class="fas fa-minus"></i> Divider
     </div>
     
-    <div id="github-settings">
-      <h3>GitHub Settings</h3>
-      <label for="github-user">Username</label>
-      <input type="text" id="github-user" placeholder="your-username">
-      
-      <label for="github-repo">Repository</label>
-      <input type="text" id="github-repo" placeholder="your-repo">
-      
-      <label for="github-token">Access Token</label>
-      <input type="password" id="github-token" placeholder="ghp_yourToken">
-      
-      <small>Create a token with "repo" permissions in GitHub Settings</small>
-    </div>
+    
   </div>
 
   <!-- Workspace -->
@@ -718,7 +699,7 @@
           const response = await fetch(url, {
             method: 'PUT',
             headers: {
-              'Authorization': `token ${githubToken}`,
+              'Authorization': `token `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,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
