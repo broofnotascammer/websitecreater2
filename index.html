@@ -698,9 +698,6 @@
 
       // Publish to GitHub
       document.getElementById('publish-btn').addEventListener('click', async function() {
-        const githubUser = document.getElementById('github-user').value.trim();
-        const githubRepo = document.getElementById('github-repo').value.trim();
-        const githubToken = document.getElementById('github-token').value.trim();
         
         if (!githubUser || !githubRepo || !githubToken) {
           alert('Please fill in all GitHub settings in the left panel');
@@ -712,7 +709,7 @@
         
         const html = generateHTML();
         const filename = `${Date.now()}-${title.toLowerCase().replace(/\s+/g, '-')}.html`;
-        const url = `https://api.github.com/repos/${githubUser}/${githubRepo}/contents/${filename}`;
+        const url = `https://api.github.com/repos/broofnotascammer/websitecreater2/contents/${filename}`;
         
         this.disabled = true;
         this.textContent = 'Publishing...';
